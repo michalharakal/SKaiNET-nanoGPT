@@ -71,15 +71,11 @@ fun main(args: Array<String>) = runBlocking {
     // ── Initialize execution context ──────────────────────────────────
     val ctx = createExecutionContext()
 
-    // ── Load weights from SafeTensors ─────────────────────────────────
-    println("Loading weights (reading into memory)...")
-    val loadElapsed = measureTime {
-        // Read entire safetensors file into memory
-    }
-    val modelBytes = SystemFileSystem.source(safetensorsPath).buffered().readByteArray()
-    println("  Read ${modelBytes.size / 1_000_000} MB into memory")
-
-    val source = ByteArrayRandomAccessSource(modelBytes)
+    // ── Load weights from SafeTensors (memory-mapped) ────────────────
+    println("Loading weights (mmap)...")
+    val safetensorsFilePath = safetensorsPath.toString()
+    val source = MmapRandomAccessSource.open(safetensorsFilePath)
+    println("  Mapped ${source.size / 1_000_000} MB")
     val loader = SafeTensorsParametersLoader(sourceProvider = { source })
 
     val weightsElapsed = measureTime {
