@@ -1,40 +1,94 @@
 plugins {
-    alias(libs.plugins.jetbrainsKotlinJvm)
+    alias(libs.plugins.kotlinMultiplatform)
     alias(libs.plugins.kotlinSerialization)
     alias(libs.plugins.shadow)
-    application
 }
 
 kotlin {
     jvmToolchain(21)
-}
 
-dependencies {
-    implementation(kotlin("stdlib"))
-    implementation(libs.kotlinx.coroutines)
-    implementation(libs.kotlinx.serialization.json)
-    implementation(libs.kotlinx.cli)
+    jvm()
 
-    // SKaiNET core -- tensor language, NN layers, slicing DSL, tensor DSL
-    implementation(libs.skainet.lang.core)
-    implementation(libs.skainet.lang.dag)
+    macosArm64 {
+        binaries {
+            executable {
+                entryPoint = "sk.ainet.nanogpt.cli.main"
+                baseName = "nanogpt"
+            }
+        }
+    }
 
-    // SKaiNET compile -- autograd tape, graph execution context
-    implementation(libs.skainet.compile.core)
-    implementation(libs.skainet.compile.dag)
+    linuxX64 {
+        binaries {
+            executable {
+                entryPoint = "sk.ainet.nanogpt.cli.main"
+                baseName = "nanogpt"
+            }
+        }
+    }
 
-    // SKaiNET backend -- CPU execution with JDK 21 Vector API / SIMD
-    implementation(libs.skainet.backend.cpu)
+    linuxArm64 {
+        binaries {
+            executable {
+                entryPoint = "sk.ainet.nanogpt.cli.main"
+                baseName = "nanogpt"
+            }
+        }
+    }
 
-    // SKaiNET I/O -- SafeTensors weight loading
-    implementation(libs.skainet.io.core)
-    implementation(libs.skainet.io.safetensors)
+    @Suppress("OPT_IN_USAGE")
+    applyDefaultHierarchyTemplate {
+        common {
+            group("native") {
+                group("macos") {
+                    withMacosArm64()
+                }
+                group("linux") {
+                    withLinuxX64()
+                    withLinuxArm64()
+                }
+            }
+        }
+    }
 
-    testImplementation(libs.kotlin.test)
-}
+    sourceSets {
+        commonMain.dependencies {
+            implementation(kotlin("stdlib"))
+            implementation(libs.kotlinx.coroutines)
+            implementation(libs.kotlinx.serialization.json)
 
-application {
-    mainClass.set("sk.ainet.nanogpt.MainKt")
+            // SKaiNET core -- tensor language, NN layers, slicing DSL, tensor DSL
+            implementation(libs.skainet.lang.core)
+            implementation(libs.skainet.lang.dag)
+
+            // SKaiNET compile -- autograd tape, graph execution context
+            implementation(libs.skainet.compile.core)
+            implementation(libs.skainet.compile.dag)
+
+            // SKaiNET backend -- CPU execution
+            implementation(libs.skainet.backend.cpu)
+
+            // SKaiNET I/O -- SafeTensors weight loading
+            implementation(libs.skainet.io.core)
+            implementation(libs.skainet.io.safetensors)
+        }
+
+        commonTest.dependencies {
+            implementation(libs.kotlin.test)
+        }
+
+        val jvmMain by getting {
+            dependencies {
+                implementation(libs.kotlinx.cli)
+            }
+        }
+
+        val nativeMain by getting {
+            dependencies {
+                implementation(libs.kotlinx.io.core)
+            }
+        }
+    }
 }
 
 tasks.withType<Test>().configureEach {
@@ -47,6 +101,7 @@ tasks.withType<JavaExec>().configureEach {
     jvmArgs("--enable-preview", "--add-modules", "jdk.incubator.vector")
 }
 
+// Shadow jar for JVM fat-jar distribution
 tasks.withType<com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar> {
     archiveBaseName.set("nanogpt")
     manifest {

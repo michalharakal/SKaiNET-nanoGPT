@@ -10,7 +10,6 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.int
-import java.io.File
 
 /**
  * GPT-2 BPE tokenizer.
@@ -40,7 +39,7 @@ public class GPT2Tokenizer private constructor(
         for (match in pattern.findAll(text)) {
             val word = match.value
             // Convert each byte to the GPT-2 byte encoding
-            val encoded = word.toByteArray(Charsets.UTF_8).map { BYTE_ENCODER[it.toInt() and 0xFF]!! }.joinToString("")
+            val encoded = word.encodeToByteArray().map { BYTE_ENCODER[it.toInt() and 0xFF]!! }.joinToString("")
             // Apply BPE merges
             val bpeTokens = bpe(encoded)
             for (bpeToken in bpeTokens.split(" ")) {
@@ -59,7 +58,7 @@ public class GPT2Tokenizer private constructor(
         val joined = pieces.joinToString("")
         // Reverse the byte encoding
         val bytes = joined.map { BYTE_DECODER[it] ?: 0 }.toByteArray()
-        return String(bytes, Charsets.UTF_8)
+        return bytes.decodeToString()
     }
 
     /** Decode a single token ID to text. */
@@ -109,21 +108,7 @@ public class GPT2Tokenizer private constructor(
 
     public companion object {
         /**
-         * Load tokenizer from a HuggingFace model directory containing
-         * `vocab.json` and `merges.txt`.
-         */
-        public fun fromDirectory(dir: String): GPT2Tokenizer {
-            val vocabFile = File(dir, "vocab.json")
-            val mergesFile = File(dir, "merges.txt")
-
-            require(vocabFile.exists()) { "vocab.json not found in $dir" }
-            require(mergesFile.exists()) { "merges.txt not found in $dir" }
-
-            return fromFiles(vocabFile.readText(), mergesFile.readText())
-        }
-
-        /**
-         * Load tokenizer from raw file contents.
+         * Load tokenizer from raw file contents (vocab.json text and merges.txt text).
          */
         public fun fromFiles(vocabJson: String, mergesTxt: String): GPT2Tokenizer {
             // Parse vocab.json: {"token": id, ...}

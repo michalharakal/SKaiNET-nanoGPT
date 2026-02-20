@@ -66,7 +66,7 @@ fun main(args: Array<String>) {
     println("Loading tokenizer...")
     println("  vocab:  ${vocabFile.absolutePath} (${vocabFile.length() / 1024} KB)")
     println("  merges: ${mergesFile.absolutePath} (${mergesFile.length() / 1024} KB)")
-    val tokenizer = GPT2Tokenizer.fromDirectory(resolvedDir)
+    val tokenizer = GPT2Tokenizer.fromFiles(vocabFile.readText(), mergesFile.readText())
     println("  Tokenizer ready")
 
     // ── Initialize SKaiNET execution context (CPU backend with SIMD) ──
