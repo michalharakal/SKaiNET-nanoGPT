@@ -1,6 +1,6 @@
 # SKaiNET-nanoGPT
 
-A faithful Kotlin port of [Andrej Karpathy's nanoGPT](https://github.com/karpathy/nanoGPT) built on the [SKaiNET](https://github.com/AiNET-SKaiNET/SKaiNET) deep learning framework. Loads real GPT-2 weights from HuggingFace and generates text — entirely on the JVM, with zero Python dependencies.
+A faithful Kotlin port of [Andrej Karpathy's nanoGPT](https://github.com/karpathy/nanoGPT) built on the [SKaiNET](https://github.com/SKaiNET-developers/SKaiNET) deep learning framework. Loads real GPT-2 weights from HuggingFace and generates text — entirely on the JVM, with zero Python dependencies.
 
 ## What is this?
 
