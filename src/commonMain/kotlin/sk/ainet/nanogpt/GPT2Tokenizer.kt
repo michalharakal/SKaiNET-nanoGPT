@@ -35,7 +35,9 @@ public class GPT2Tokenizer private constructor(
     public fun encode(text: String): IntArray {
         val tokens = mutableListOf<Int>()
         // Split into words (GPT-2 regex pattern: contractions, words, numbers, whitespace+char)
-        val pattern = Regex("""'s|'t|'re|'ve|'m|'ll|'d| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+""")
+        // GPT-2 tokenization pattern. Uses [a-zA-Z] and [0-9] instead of \p{L}/\p{N}
+        // for Kotlin/Native compatibility (K/N regex doesn't support Unicode categories).
+        val pattern = Regex("""'s|'t|'re|'ve|'m|'ll|'d| ?[a-zA-Z]+| ?[0-9]+| ?[^\sa-zA-Z0-9]+|\s+(?!\S)|\s+""")
         for (match in pattern.findAll(text)) {
             val word = match.value
             // Convert each byte to the GPT-2 byte encoding
