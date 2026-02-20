@@ -1,0 +1,49 @@
+# models
+*.gguf
+*.onnx
+model-371/
+
+local.properties
+.gradle
+.gradle*
+build/
+!gradle/wrapper/gradle-wrapper.jar
+.kotlin
+
+.kiro/
+.claude/
+
+## antora
+_public
+.cache
+
+### MNIST data
+
+*ubyte*
+
+### IntelliJ IDEA ###
+.idea
+*.iws
+*.iml
+*.ipr
+out/
+
+
+### VS Code ###
+.vscode/
+
+### Mac OS ###
+.DS_Store
+
+.java-version
+
+### BROKK'S CONFIGURATION ###
+.brokk/**
+/.brokk/workspace.properties
+/.brokk/sessions/
+/.brokk/dependencies/
+/.brokk/history.zip
+!.brokk/style.md
+!.brokk/review.md
+!.brokk/project.properties
+**.onnx
