@@ -1,10 +1,15 @@
 # SKaiNET-nanoGPT
 
-A faithful Kotlin port of [Andrej Karpathy's nanoGPT](https://github.com/karpathy/nanoGPT) built on the [SKaiNET](https://github.com/SKaiNET-developers/SKaiNET) deep learning framework. Loads real GPT-2 weights from HuggingFace and generates text — entirely on the JVM, with zero Python dependencies.
+A faithful Kotlin port of [Andrej Karpathy's nanoGPT](https://github.com/karpathy/nanoGPT) built on the [SKaiNET](https://github.com/SKaiNET-developers/SKaiNET) deep learning framework. Loads real GPT-2 weights from HuggingFace and generates text — on the JVM or as a native binary, with zero Python dependencies.
 
 ## What is this?
 
-Karpathy's `model.py` is a clean, single-file GPT-2 implementation in ~330 lines of Python/PyTorch. This project ports it to Kotlin using SKaiNET's tensor primitives and DSLs, producing a standalone GPT-2 inference engine that runs on any JVM 21+ platform.
+Karpathy's `model.py` is a clean, single-file GPT-2 implementation in ~330 lines of Python/PyTorch. This project ports it to Kotlin using SKaiNET's tensor primitives and DSLs, producing a standalone GPT-2 inference engine.
+
+The project is built with **Kotlin Multiplatform (KMP)** and compiles to:
+- **JVM** — runs on any JDK 21+ with SIMD acceleration via the Vector API
+- **macOS ARM64** — native binary (`nanogpt.kexe`), no JVM required
+- **Linux x64 / ARM64** — native binaries for server and edge deployment
 
 The port is structurally faithful to the original — the same pre-norm transformer architecture, the same weight-tying scheme, the same causal attention with additive masking — but expressed through SKaiNET's type-safe Kotlin APIs instead of PyTorch.
 
@@ -12,8 +17,8 @@ The port is structurally faithful to the original — the same pre-norm transfor
 
 SKaiNET is a Kotlin Multiplatform deep learning framework designed for edge and on-device AI. Using it instead of PyTorch gives you:
 
-### Run anywhere the JVM runs
-No CUDA, no Python, no native library installation. The CPU backend uses JDK 21's Vector API for SIMD-accelerated tensor operations. The same code runs on macOS, Linux, Windows — and with SKaiNET's multiplatform targets, the core model logic can compile to Android, iOS, JS, WASM, and native binaries.
+### Run anywhere — JVM or native
+No CUDA, no Python, no native library installation. On the JVM, the CPU backend uses JDK 21's Vector API for SIMD-accelerated tensor operations. On native targets (macOS, Linux), the same model code compiles to standalone binaries with POSIX mmap for zero-copy weight loading.
 
 ### Type-safe tensor programming
 SKaiNET tensors are parameterized as `Tensor<T, V>` where `T` is the precision type (`FP32`, `FP16`, `Int8`) and `V` is the JVM value type. Shape mismatches and type errors are caught at compile time, not at runtime.
@@ -83,7 +88,7 @@ huggingface-cli download openai-community/gpt2 --local-dir ~/models/gpt2
 
 You need three files: `model.safetensors`, `vocab.json`, `merges.txt`.
 
-### Build and run
+### Build and run (JVM)
 
 ```bash
 cd SKaiNET-nanoGPT
@@ -92,7 +97,7 @@ cd SKaiNET-nanoGPT
 jenv local 21.0          # or: export JAVA_HOME=/path/to/jdk-21
 
 # Run via Gradle
-JAVA_HOME=$(jenv javahome) ./gradlew run \
+JAVA_HOME=$(jenv javahome) ./gradlew jvmRun \
   --args="--model-dir ~/models/gpt2 -p 'The meaning of life is' -n 100 -t 0.8"
 ```
 
@@ -109,6 +114,21 @@ java --enable-preview --add-modules jdk.incubator.vector \
   --temperature 0.7 \
   --top-k 40
 ```
+
+### Build and run (native)
+
+```bash
+# Build the native binary for your platform
+./gradlew macosArm64Binaries    # macOS Apple Silicon
+./gradlew linuxX64Binaries      # Linux x86_64
+./gradlew linuxArm64Binaries    # Linux ARM64
+
+# Run directly — no JVM needed
+./build/bin/macosArm64/releaseExecutable/nanogpt.kexe \
+  ~/models/gpt2 "The meaning of life is" 100 0.8
+```
+
+The native binary uses POSIX `mmap` for weight loading — the OS pages in tensor data on demand instead of copying the entire file into memory.
 
 ### CLI options
 
@@ -133,13 +153,24 @@ java --enable-preview --add-modules jdk.incubator.vector \
 ## Project structure
 
 ```
-src/main/kotlin/sk/ainet/nanogpt/
-├── GPTConfig.kt           Model configuration (GPT2, Medium, Large, XL presets)
-├── GPTWeights.kt          Weight data classes (per-layer + model-level)
-├── GPTRuntime.kt          Transformer forward pass and autoregressive generation
-├── GPTWeightLoader.kt     SafeTensors loading with Conv1D weight transposition
-├── GPT2Tokenizer.kt       Byte-level BPE tokenizer (vocab.json + merges.txt)
-└── Main.kt                CLI entry point
+src/
+├── commonMain/kotlin/sk/ainet/nanogpt/
+│   ├── GPTConfig.kt               Model configuration (GPT2, Medium, Large, XL presets)
+│   ├── GPTWeights.kt              Weight data classes (per-layer + model-level)
+│   ├── GPTRuntime.kt              Transformer forward pass + parallel attention heads
+│   ├── GPTWeightLoader.kt         SafeTensors loading with Conv1D weight transposition
+│   └── GPT2Tokenizer.kt           Byte-level BPE tokenizer (vocab.json + merges.txt)
+├── jvmMain/kotlin/sk/ainet/nanogpt/
+│   └── Main.kt                    JVM CLI entry point (java.io.File, JvmRandomAccessSource)
+├── nativeMain/kotlin/sk/ainet/nanogpt/cli/
+│   ├── Main.kt                    Native CLI entry point (kotlinx.io + mmap)
+│   ├── MmapRandomAccessSource.kt  POSIX mmap-based RandomAccessSource
+│   ├── ByteArrayRandomAccessSource.kt  In-memory RandomAccessSource fallback
+│   └── Platform.kt                expect fun createExecutionContext()
+├── macosMain/kotlin/sk/ainet/nanogpt/cli/
+│   └── Platform.kt                actual: DirectCpuExecutionContext
+└── linuxMain/kotlin/sk/ainet/nanogpt/cli/
+    └── Platform.kt                actual: DirectCpuExecutionContext
 ```
 
 ## How it works
@@ -152,9 +183,11 @@ The runtime follows the same pattern as SKaiNET's existing LlamaRuntime and Bert
 3. Final LayerNorm
 4. Linear projection to vocabulary (weight-tied with token embeddings)
 
-**Attention** splits the combined QKV projection using SKaiNET's slicing DSL, iterates over heads, applies a pre-computed additive causal mask, and concatenates head outputs.
+**Attention** splits the combined QKV projection using SKaiNET's slicing DSL, runs all heads in parallel via `coroutineScope { async { ... } }`, applies a pre-computed additive causal mask, and concatenates head outputs.
 
 **Generation** re-runs the full forward pass each step (no KV cache), cropping to the context window when the sequence exceeds `blockSize`. This matches `model.py`'s `generate()` exactly.
+
+**Native I/O** uses POSIX `mmap` to map SafeTensors files directly into virtual memory. The OS pages in weight data on demand — no heap allocation for the model file, and the kernel handles caching and eviction.
 
 ## Acknowledgements
 
