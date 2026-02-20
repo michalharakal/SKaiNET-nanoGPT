@@ -18,7 +18,7 @@ import sk.ainet.io.safetensors.SafeTensorsParametersLoader
 import sk.ainet.lang.types.FP32
 import java.io.File
 
-fun main(args: Array<String>) {
+fun main(args: Array<String>) = runBlocking {
     // ── Parse arguments ───────────────────────────────────────────────
     val parsed = parseArgs(args)
     val modelDir = parsed["--model-dir"] ?: parsed["-d"]
@@ -30,7 +30,7 @@ fun main(args: Array<String>) {
 
     if (modelDir == null) {
         printUsage()
-        return
+        return@runBlocking
     }
 
     val resolvedDir = if (modelDir.startsWith("~")) {
@@ -80,10 +80,8 @@ fun main(args: Array<String>) {
     )
 
     val startLoad = System.nanoTime()
-    val weights = runBlocking {
-        loadGPTWeights(loader, ctx, FP32::class, config) { msg ->
-            println("  $msg")
-        }
+    val weights = loadGPTWeights(loader, ctx, FP32::class, config) { msg ->
+        println("  $msg")
     }
     val loadTime = (System.nanoTime() - startLoad) / 1e9
     println("  Weights loaded in %.2fs".format(loadTime))

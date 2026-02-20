@@ -11,6 +11,8 @@
  */
 package sk.ainet.nanogpt
 
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import sk.ainet.context.ExecutionContext
 import sk.ainet.lang.nn.layers.Embedding
 import sk.ainet.lang.nn.normalization.LayerNormalization
@@ -168,7 +170,7 @@ public class GPTRuntime<T : DType>(
      * @param tokenIds Token ID sequence, shape [seqLen]
      * @return Logits tensor, shape [seqLen, vocabSize]
      */
-    public fun forward(tokenIds: IntArray): Tensor<T, Float> {
+    public suspend fun forward(tokenIds: IntArray): Tensor<T, Float> {
         val seqLen = tokenIds.size
         require(seqLen <= config.blockSize) {
             "Sequence length $seqLen exceeds block size ${config.blockSize}"
@@ -200,7 +202,7 @@ public class GPTRuntime<T : DType>(
      * x = x + mlp(ln_2(x))
      * ```
      */
-    private fun transformerBlock(
+    private suspend fun transformerBlock(
         layerIdx: Int,
         x: Tensor<T, Float>,
         seqLen: Int
@@ -231,7 +233,7 @@ public class GPTRuntime<T : DType>(
      *
      * Follows the BERT attention pattern with an added causal (lower-triangular) mask.
      */
-    private fun causalSelfAttention(
+    private suspend fun causalSelfAttention(
         input: Tensor<T, Float>,
         layer: GPTLayerWeights<T>,
         tw: TransposedWeights<T>,
@@ -260,35 +262,36 @@ public class GPTRuntime<T : DType>(
             segment { range(0, seqLen) }    // cols [0, seqLen)
         }
 
-        // ── Per-head attention (BERT-style with causal mask) ─────────────
+        // ── Per-head attention (parallel across heads) ───────────────────
         val scale = mathSqrt(headDim.toDouble()).toFloat()
-        val headOutputs = ArrayList<Tensor<T, Float>>(nHead)
 
-        for (h in 0 until nHead) {
-            val offset = h * headDim
+        val headOutputs = coroutineScope {
+            (0 until nHead).map { h ->
+                async {
+                    val offset = h * headDim
 
-            // Slicing DSL: extract per-head Q, K, V slices
-            val qh = q.sliceView {
-                segment { all() }
-                segment { range(offset, offset + headDim) }
-            }
-            val kh = k.sliceView {
-                segment { all() }
-                segment { range(offset, offset + headDim) }
-            }
-            val vh = v.sliceView {
-                segment { all() }
-                segment { range(offset, offset + headDim) }
-            }
+                    // Slicing DSL: extract per-head Q, K, V slices
+                    val qh = q.sliceView {
+                        segment { all() }
+                        segment { range(offset, offset + headDim) }
+                    }
+                    val kh = k.sliceView {
+                        segment { all() }
+                        segment { range(offset, offset + headDim) }
+                    }
+                    val vh = v.sliceView {
+                        segment { all() }
+                        segment { range(offset, offset + headDim) }
+                    }
 
-            // Scaled dot-product attention with causal mask:
-            //   attn = softmax(Q @ K^T / sqrt(d) + mask) @ V
-            val scores = qh.matmul(kh.t()) / scale  // [seqLen, seqLen]
-            val masked = scores + mask                // apply causal mask (additive -1e9)
-            val attnWeights = masked.softmax(dim = 1) // softmax over key dimension
-            val headOut = attnWeights.matmul(vh)       // [seqLen, headDim]
-
-            headOutputs.add(headOut)
+                    // Scaled dot-product attention with causal mask:
+                    //   attn = softmax(Q @ K^T / sqrt(d) + mask) @ V
+                    val scores = qh.matmul(kh.t()) / scale  // [seqLen, seqLen]
+                    val masked = scores + mask                // apply causal mask (additive -1e9)
+                    val attnWeights = masked.softmax(dim = 1) // softmax over key dimension
+                    attnWeights.matmul(vh)                    // [seqLen, headDim]
+                }
+            }.map { it.await() }
         }
 
         // Concatenate heads along feature dimension → [seqLen, nEmbd]
@@ -333,7 +336,7 @@ public class GPTRuntime<T : DType>(
      * @param topK If non-null, restrict sampling to top-k logits
      * @param onToken Callback invoked for each generated token
      */
-    public fun generate(
+    public suspend fun generate(
         prompt: IntArray,
         maxNewTokens: Int,
         temperature: Float = 1.0f,
