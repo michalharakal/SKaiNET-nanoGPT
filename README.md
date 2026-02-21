@@ -1,6 +1,6 @@
 # SKaiNET-nanoGPT
 
-A faithful Kotlin port of [Andrej Karpathy's nanoGPT](https://github.com/karpathy/nanoGPT) built on the [SKaiNET](https://github.com/SKaiNET-developers/SKaiNET) deep learning framework. Loads real GPT-2 weights from HuggingFace and generates text — on the JVM or as a native binary, with zero Python dependencies.
+A faithful Kotlin port of [Andrej Karpathy's nanoGPT](https://github.com/karpathy/nanoGPT) built on the [SKaiNET](https://github.com/SKaiNET-developers/SKaiNET) deep learning framework. Loads real GPT-2 weights from HuggingFace and generates text — on the JVM, as a native binary, or in the browser via JS/WASM, with zero Python dependencies.
 
 ## What is this?
 
@@ -10,6 +10,8 @@ The project is built with **Kotlin Multiplatform (KMP)** and compiles to:
 - **JVM** — runs on any JDK 21+ with SIMD acceleration via the Vector API
 - **macOS ARM64** — native binary (`nanogpt.kexe`), no JVM required
 - **Linux x64 / ARM64** — native binaries for server and edge deployment
+- **JS** — runs in Node.js or the browser
+- **WASM/JS** — WebAssembly for near-native browser performance
 
 The port is structurally faithful to the original — the same pre-norm transformer architecture, the same weight-tying scheme, the same causal attention with additive masking — but expressed through SKaiNET's type-safe Kotlin APIs instead of PyTorch.
 
@@ -17,8 +19,8 @@ The port is structurally faithful to the original — the same pre-norm transfor
 
 SKaiNET is a Kotlin Multiplatform deep learning framework designed for edge and on-device AI. Using it instead of PyTorch gives you:
 
-### Run anywhere — JVM or native
-No CUDA, no Python, no native library installation. On the JVM, the CPU backend uses JDK 21's Vector API for SIMD-accelerated tensor operations. On native targets (macOS, Linux), the same model code compiles to standalone binaries with POSIX mmap for zero-copy weight loading.
+### Run anywhere — JVM, native, or browser
+No CUDA, no Python, no native library installation. On the JVM, the CPU backend uses JDK 21's Vector API for SIMD-accelerated tensor operations. On native targets (macOS, Linux), the same model code compiles to standalone binaries with POSIX mmap for zero-copy weight loading. On JS/WASM, the model runs directly in the browser or Node.js.
 
 ### Type-safe tensor programming
 SKaiNET tensors are parameterized as `Tensor<T, V>` where `T` is the precision type (`FP32`, `FP16`, `Int8`) and `V` is the JVM value type. Shape mismatches and type errors are caught at compile time, not at runtime.
@@ -129,6 +131,20 @@ java --enable-preview --add-modules jdk.incubator.vector \
 ```
 
 The native binary uses POSIX `mmap` for weight loading — the OS pages in tensor data on demand instead of copying the entire file into memory.
+
+### Build for JS / WASM
+
+The core model code (tokenizer, runtime, weights) compiles to JavaScript and WebAssembly. These targets produce library artifacts that can be integrated into a web application.
+
+```bash
+# Compile to JavaScript (browser + Node.js)
+./gradlew jsJar
+
+# Compile to WebAssembly
+./gradlew wasmJsJar
+```
+
+The JS and WASM builds produce Kotlin/JS library modules under `build/libs/`. To use them in a browser application, you would provide model weights via `fetch` + `ByteArrayRandomAccessSource` and wire up a UI for prompt input and token output.
 
 ### CLI options
 
