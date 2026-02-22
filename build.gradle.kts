@@ -19,6 +19,7 @@ kotlin {
     @OptIn(ExperimentalWasmDsl::class)
     wasmJs {
         browser()
+        binaries.executable()
     }
 
     macosArm64 {
@@ -98,6 +99,12 @@ kotlin {
         val nativeMain by getting {
             dependencies {
                 implementation(libs.kotlinx.io.core)
+            }
+        }
+
+        val wasmJsMain by getting {
+            dependencies {
+                implementation(libs.kotlinx.browser)
             }
         }
     }

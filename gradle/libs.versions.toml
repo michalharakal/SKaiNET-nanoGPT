@@ -5,6 +5,7 @@ kotlinxCoroutines = "1.10.2"
 kotlinxSerializationJson = "1.9.0"
 kotlinxCli = "0.3.6"
 kotlinxIo = "0.8.2"
+kotlinxBrowser = "0.5.0"
 shadow = "9.3.1"
 
 [libraries]
@@ -21,6 +22,7 @@ kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serializa
 kotlinx-cli = { module = "org.jetbrains.kotlinx:kotlinx-cli", version.ref = "kotlinxCli" }
 kotlinx-io-core = { module = "org.jetbrains.kotlinx:kotlinx-io-core", version.ref = "kotlinxIo" }
 kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }
+kotlinx-browser = { module = "org.jetbrains.kotlinx:kotlinx-browser", version.ref = "kotlinxBrowser" }
 
 [plugins]
 jetbrainsKotlinJvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }

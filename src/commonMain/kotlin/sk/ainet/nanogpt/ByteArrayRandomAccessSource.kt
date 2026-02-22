@@ -1,8 +1,8 @@
-package sk.ainet.nanogpt.cli
+package sk.ainet.nanogpt
 
 import sk.ainet.io.RandomAccessSource
 
-internal class ByteArrayRandomAccessSource(private val data: ByteArray) : RandomAccessSource {
+public class ByteArrayRandomAccessSource(private val data: ByteArray) : RandomAccessSource {
     override val size: Long = data.size.toLong()
 
     override fun readAt(position: Long, length: Int): ByteArray {

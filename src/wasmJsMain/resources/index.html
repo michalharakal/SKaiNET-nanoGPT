@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SKaiNET-nanoGPT — Browser Inference</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body { font-family: system-ui, -apple-system, sans-serif; margin: 0; padding: 2rem; background: #f8f9fa; color: #212529; }
+    h1 { margin: 0 0 0.25rem; font-size: 1.5rem; }
+    .subtitle { color: #6c757d; margin: 0 0 1.5rem; font-size: 0.9rem; }
+
+    .drop-zone {
+      border: 2px dashed #adb5bd; border-radius: 8px; padding: 2rem; text-align: center;
+      background: #fff; transition: border-color 0.2s, background 0.2s;
+    }
+    .drop-zone.dragover { border-color: #228be6; background: #e7f5ff; }
+    .drop-zone p { margin: 0 0 1rem; font-size: 1rem; }
+    .drop-zone .hint { font-size: 0.8rem; color: #868e96; margin-top: 1rem; }
+
+    .file-buttons { display: flex; gap: 0.5rem; justify-content: center; margin-top: 1rem; }
+    .file-buttons button {
+      padding: 0.4rem 1rem; border: 1px solid #ced4da; border-radius: 4px;
+      background: #f8f9fa; color: #495057; font-size: 0.8rem; cursor: pointer;
+    }
+    .file-buttons button:hover { background: #e9ecef; }
+    .file-buttons input[type="file"] { display: none; }
+
+    .badges { display: flex; gap: 0.5rem; justify-content: center; flex-wrap: wrap; }
+    .badge {
+      display: inline-flex; align-items: center; gap: 0.35rem;
+      padding: 0.3rem 0.75rem; border-radius: 999px; font-size: 0.8rem; font-weight: 500;
+      background: #e9ecef; color: #495057;
+    }
+    .badge.loaded { background: #d3f9d8; color: #2b8a3e; }
+    .badge .dot { width: 8px; height: 8px; border-radius: 50%; background: #adb5bd; }
+    .badge.loaded .dot { background: #40c057; }
+
+    .controls { display: flex; gap: 0.75rem; margin: 1.5rem 0; flex-wrap: wrap; align-items: end; }
+    .control-group { display: flex; flex-direction: column; gap: 0.25rem; }
+    .control-group label { font-size: 0.75rem; font-weight: 600; color: #495057; }
+    .control-group input {
+      padding: 0.4rem 0.6rem; border: 1px solid #ced4da; border-radius: 4px; font-size: 0.85rem;
+    }
+    .control-group input[type="text"] { width: 320px; }
+    .control-group input[type="number"] { width: 80px; }
+    .model-info { font-size: 0.8rem; color: #495057; align-self: end; padding-bottom: 0.45rem; }
+
+    button#generate {
+      padding: 0.5rem 1.25rem; border: none; border-radius: 4px; font-size: 0.9rem; font-weight: 600;
+      background: #228be6; color: #fff; cursor: pointer; align-self: end;
+    }
+    button#generate:disabled { background: #adb5bd; cursor: not-allowed; }
+    button#generate:not(:disabled):hover { background: #1c7ed6; }
+
+    .output-label { font-size: 0.75rem; font-weight: 600; color: #495057; margin-bottom: 0.25rem; }
+    #output {
+      white-space: pre-wrap; word-break: break-word;
+      border: 1px solid #dee2e6; border-radius: 6px; padding: 1rem;
+      min-height: 200px; background: #fff; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 0.85rem;
+      line-height: 1.5;
+    }
+    #status { font-size: 0.8rem; color: #6c757d; margin-top: 0.5rem; min-height: 1.2em; }
+
+    /* Progress bar */
+    .progress-wrap {
+      margin-top: 0.4rem; height: 6px; border-radius: 3px; background: #e9ecef;
+      overflow: hidden; display: none;
+    }
+    .progress-wrap.visible { display: block; }
+    .progress-bar {
+      height: 100%; width: 0%; border-radius: 3px; background: #228be6;
+      transition: width 0.15s ease;
+    }
+  </style>
+</head>
+<body>
+  <h1>SKaiNET-nanoGPT</h1>
+  <p class="subtitle">GPT-2 inference in the browser via WebAssembly</p>
+
+  <div class="drop-zone" id="drop-zone">
+    <p>Drag &amp; drop your GPT-2 files here</p>
+    <div class="badges">
+      <span class="badge" id="badge-model"><span class="dot"></span>model.safetensors</span>
+      <span class="badge" id="badge-vocab"><span class="dot"></span>vocab.json</span>
+      <span class="badge" id="badge-merges"><span class="dot"></span>merges.txt</span>
+    </div>
+    <div class="file-buttons">
+      <button id="btn-folder" type="button">Open model folder</button>
+      <button id="btn-files" type="button">Select files</button>
+      <input type="file" id="input-folder" webkitdirectory multiple />
+      <input type="file" id="input-files" multiple accept=".safetensors,.json,.txt" />
+    </div>
+    <div class="hint">Expects: model.safetensors, vocab.json, merges.txt</div>
+  </div>
+
+  <div class="controls">
+    <div class="control-group">
+      <label for="prompt">Prompt</label>
+      <input type="text" id="prompt" value="Once upon a time" />
+    </div>
+    <div class="control-group">
+      <label for="max-tokens">Max tokens</label>
+      <input type="number" id="max-tokens" value="100" min="1" max="1024" />
+    </div>
+    <div class="control-group">
+      <label for="temperature">Temperature</label>
+      <input type="number" id="temperature" value="0.8" min="0" max="2" step="0.1" />
+    </div>
+    <span class="model-info" id="model-info"></span>
+    <button id="generate" disabled>Generate</button>
+  </div>
+
+  <div class="output-label">Output</div>
+  <div id="output"></div>
+  <div id="status"></div>
+  <div class="progress-wrap" id="progress-wrap"><div class="progress-bar" id="progress-bar"></div></div>
+
+  <script>
+    // ── Shared state: JS writes file data, WASM reads it ────────────────────
+    window._nanogpt = {
+      modelBytes: null, vocabText: null, mergesText: null, modelSize: 0,
+      filesReady: false,   // set true when all 3 files loaded
+      filesVersion: 0      // bumped each time new files arrive (WASM polls this)
+    };
+
+    function classifyFile(file) {
+      const n = file.name.toLowerCase();
+      if (n === 'model.safetensors' || n.endsWith('.safetensors')) return 'model';
+      if (n === 'vocab.json' || (n.endsWith('.json') && n.includes('vocab'))) return 'vocab';
+      if (n === 'merges.txt' || (n.endsWith('.txt') && n.includes('merges'))) return 'merges';
+      return null;
+    }
+
+    function setStatus(msg) {
+      document.getElementById('status').textContent = msg;
+    }
+
+    function updateBadges() {
+      const s = window._nanogpt;
+      document.getElementById('badge-model').classList.toggle('loaded', s.modelBytes !== null);
+      document.getElementById('badge-vocab').classList.toggle('loaded', s.vocabText !== null);
+      document.getElementById('badge-merges').classList.toggle('loaded', s.mergesText !== null);
+
+      const info = document.getElementById('model-info');
+      if (s.modelBytes) {
+        const mb = s.modelBytes.byteLength / 1e6;
+        let label;
+        if (mb < 600)       label = 'GPT-2 (124M)';
+        else if (mb < 1600) label = 'GPT-2 Medium (350M)';
+        else if (mb < 3200) label = 'GPT-2 Large (774M)';
+        else                label = 'GPT-2 XL (1.5B)';
+        info.textContent = label + ' \u2014 ' + Math.round(mb) + ' MB';
+      } else {
+        info.textContent = '';
+      }
+    }
+
+    async function handleFiles(fileList) {
+      for (const file of fileList) {
+        const kind = classifyFile(file);
+        if (!kind) continue;
+        setStatus('Reading ' + file.name + '\u2026');
+        if (kind === 'model') {
+          window._nanogpt.modelBytes = await file.arrayBuffer();
+          window._nanogpt.modelSize = file.size;
+          setStatus('Loaded ' + file.name + ' (' + Math.round(file.size / 1e6) + ' MB)');
+        } else if (kind === 'vocab') {
+          window._nanogpt.vocabText = await file.text();
+          setStatus('Loaded ' + file.name);
+        } else if (kind === 'merges') {
+          window._nanogpt.mergesText = await file.text();
+          setStatus('Loaded ' + file.name);
+        }
+      }
+      updateBadges();
+      const s = window._nanogpt;
+      if (s.modelBytes && s.vocabText && s.mergesText) {
+        s.filesReady = true;
+        s.filesVersion++;
+        setStatus('All files loaded. Loading model\u2026');
+      }
+    }
+
+    // ── Drag & drop ─────────────────────────────────────────────────────────
+    const dropZone = document.getElementById('drop-zone');
+    dropZone.addEventListener('dragover', (e) => {
+      e.preventDefault(); e.dataTransfer.dropEffect = 'copy';
+      dropZone.classList.add('dragover');
+    });
+    dropZone.addEventListener('dragleave', (e) => {
+      e.preventDefault(); dropZone.classList.remove('dragover');
+    });
+    dropZone.addEventListener('drop', (e) => {
+      e.preventDefault(); dropZone.classList.remove('dragover');
+      handleFiles(e.dataTransfer.files);
+    });
+    document.addEventListener('dragover', (e) => e.preventDefault());
+    document.addEventListener('drop', (e) => e.preventDefault());
+
+    // ── File / folder picker ────────────────────────────────────────────────
+    const inputFolder = document.getElementById('input-folder');
+    const inputFiles  = document.getElementById('input-files');
+    document.getElementById('btn-folder').addEventListener('click', () => inputFolder.click());
+    document.getElementById('btn-files').addEventListener('click', () => inputFiles.click());
+    inputFolder.addEventListener('change', () => handleFiles(inputFolder.files));
+    inputFiles.addEventListener('change', () => handleFiles(inputFiles.files));
+  </script>
+
+  <!-- Load the Kotlin/WASM entry point (produced by webpack) -->
+  <script src="SKaiNET-nanoGPT.js"></script>
+</body>
+</html>
