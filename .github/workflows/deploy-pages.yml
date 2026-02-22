@@ -30,7 +30,7 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
 
       - name: Build WASM production bundle
-        run: ./gradlew wasmJsBrowserProductionWebpack
+        run: ./gradlew wasmJsBrowserDistribution
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
